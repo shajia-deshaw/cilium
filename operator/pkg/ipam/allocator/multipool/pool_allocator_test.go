@@ -1069,6 +1069,15 @@ func TestPoolAllocatorMetrics(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, float64(32), m.TotalBlocks.WithLabelValues("default", "ipv4").Get())
 
+	// Reserving 10.0.0.0-10.0.0.31 takes two /28 blocks out of the v4 total.
+	reserved := []netipx.IPRange{netipx.IPRangeFrom(netip.MustParseAddr("10.0.0.0"), netip.MustParseAddr("10.0.0.31"))}
+	err = p.UpsertPool("default",
+		[]poolCIDRConfig{{cidr: netip.MustParsePrefix("10.0.0.0/24"), reservedRanges: reserved}, {cidr: netip.MustParsePrefix("10.0.1.0/24")}}, 28,
+		[]poolCIDRConfig{{cidr: netip.MustParsePrefix("fd00::/120")}}, 122,
+	)
+	require.NoError(t, err)
+	require.Equal(t, float64(30), m.TotalBlocks.WithLabelValues("default", "ipv4").Get())
+
 	// Deleting the pool clears its series (both families).
 	require.Equal(t, 2, testutil.CollectAndCount(m.TotalBlocks))
 	require.NoError(t, p.DeletePool("default"))

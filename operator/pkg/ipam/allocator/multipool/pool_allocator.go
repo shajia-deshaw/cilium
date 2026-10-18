@@ -152,8 +152,8 @@ func NewPoolAllocator(logger *slog.Logger, enableIPv4, enableIPv6 bool, metrics 
 }
 
 // updatePoolMetricsLocked recomputes and emits the total-blocks gauge for a
-// single pool. The total only changes when a pool's CIDRs/mask change, so this
-// is called from UpsertPool. Caller must hold p.mutex.
+// single pool. The total only changes when a pool's CIDRs, mask or reserved
+// ranges change, so this is called from UpsertPool. Caller must hold p.mutex.
 func (p *PoolAllocator) updatePoolMetricsLocked(poolName string) {
 	if !p.metrics.enabled() {
 		return
@@ -164,21 +164,18 @@ func (p *PoolAllocator) updatePoolMetricsLocked(poolName string) {
 		return
 	}
 	if p.ipv4Enabled {
-		p.metrics.setPool(poolName, ipam.IPv4, totalBlocks(pool.v4, pool.v4MaskSize))
+		p.metrics.setPool(poolName, ipam.IPv4, totalBlocks(pool.v4))
 	}
 	if p.ipv6Enabled {
-		p.metrics.setPool(poolName, ipam.IPv6, totalBlocks(pool.v6, pool.v6MaskSize))
+		p.metrics.setPool(poolName, ipam.IPv6, totalBlocks(pool.v6))
 	}
 }
 
 // totalBlocks sums the CIDR-block capacity across a pool's family allocators.
-// A cluster CIDR of prefix length P carved at mask size M yields 1<<(M-P) blocks.
-func totalBlocks(allocators []cidralloc.CIDRAllocator, maskSize int) int {
+func totalBlocks(allocators []cidralloc.CIDRAllocator) int {
 	total := 0
 	for _, a := range allocators {
-		if bits := a.Prefix().Bits(); maskSize >= bits {
-			total += 1 << (maskSize - bits)
-		}
+		total += a.Capacity()
 	}
 	return total
 }
